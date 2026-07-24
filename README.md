@@ -164,20 +164,23 @@ preprocessor = ColumnTransformer([
 
 ### 2.3 Comparaison des algorithmes
 
-10 algorithmes testés dans les mêmes conditions (même pipeline, même test set) :
+11 algorithmes testés dans les mêmes conditions (même pipeline, même test set), évalués à un seuil de décision fixé à **0.3** (plutôt que le seuil par défaut de 0.5, afin de privilégier le rappel — critique en contexte de dépistage clinique, où un faux négatif est plus coûteux qu'un faux positif) :
 
-| Algorithme | Observation |
-|---|---|
-| **Régression Logistique** | ✅ **Retenu** — performances comparables, interprétable, compatible SHAP linéaire |
-| Random Forest | Bon F1, mais lent à l'inférence |
-| Decision Tree | Surapprentissage marqué |
-| Gradient Boosting | Proche de la régression logistique |
-| KNeighbors | Trop lent pour le déploiement |
-| SVM | Très lent sur 50 000 observations |
-| XGBoost | Bon compromis vitesse/performance |
-| LightGBM | Rapide, performant |
-| HistGradientBoosting | Bon sur grandes données |
-| Stacking (ensemble) | Meilleur Recall mais bien plus complexe |
+| Algorithme | Recall @seuil 0.3 | F1 @seuil 0.3 | Observations |
+|---|---|---|---|
+| **Régression Logistique** | 0.96 | 0.70 | ✅ **Retenu** — stable, interprétable, coefficients lisibles pour le SHAP linéaire |
+| Random Forest | 0.82 | 0.71 | Bon F1, mais lent à l'inférence |
+| Decision Tree | 0.63 | 0.63 | Surapprentissage marqué (overfitting) |
+| Gradient Boosting | 0.88 | 0.73 | Performances proches de LightGBM |
+| KNeighbors | 0.84 | 0.71 | Lent, pas adapté au déploiement |
+| SVM (SVC) | 0.80 | 0.62 | Très lent sur 50 000 observations |
+| XGBoost | 0.87 | 0.73 | Bon compromis vitesse/performance |
+| LightGBM | 0.87 | 0.73 | Rapide, performant |
+| HistGradientBoosting | 0.87 | 0.73 | Bon sur grandes données |
+| AdaBoost (+ tuning GridSearch) | 0.93 | 0.71 | Performant après tuning, Recall améliorable |
+| Stacking (LightGBM + GBM + AdaBoost + XGBoost, méta-modèle = Régression Logistique) | 0.87 | 0.73 | Meilleur Recall parmi les ensembles, mais bien plus complexe à maintenir et à expliquer |
+
+**Lecture du tableau :** malgré un F1-score légèrement inférieur à celui des modèles d'ensemble (0.70 contre 0.71–0.73), la régression logistique obtient le **meilleur rappel du comparatif (0.96)** — c'est-à-dire qu'elle manque le moins de vrais cas de maladie cardiovasculaire, un critère jugé prioritaire dans un contexte de dépistage médical où un faux négatif peut retarder une prise en charge. Combiné à son interprétabilité native et à sa compatibilité avec un calcul SHAP exact (non approximé), ce compromis a motivé le choix final.
 
 ### 2.4 Modèle final et sauvegarde
 
@@ -201,10 +204,10 @@ joblib.dump(pipeline_cardio, 'models/pipeline_cardio_reglog.pkl')
 
 ## 🧠 Justification du choix — Régression Logistique
 
-1. **Performances comparables** aux modèles d'ensemble sur ce dataset équilibré et bien structuré
+1. **Meilleur rappel du comparatif (0.96 @ seuil 0.3)** — critère prioritaire pour un outil de dépistage, où manquer un cas à risque est plus coûteux qu'une fausse alerte
 2. **Compatibilité native SHAP linéaire** — `shap.Explainer` avec `masker.Independent` : contributions exactes, pas d'approximation
 3. **Vitesse d'inférence** — une simple multiplication matricielle : réponse < 10 ms en production
-4. **Principe de parcimonie** — en contexte médical, un modèle interprétable et simple est préférable à un modèle opaque légèrement plus précis
+4. **Principe de parcimonie** — en contexte médical, un modèle interprétable et simple est préférable à un modèle opaque légèrement plus précis sur le F1, surtout lorsque l'écart reste marginal (0.70 contre 0.71–0.73)
 
 ---
 
@@ -284,3 +287,4 @@ seaborn>=0.13.0     # pour les graphiques EDA uniquement
 - Ce modèle est un **outil d'aide à la décision** — il ne remplace pas le jugement clinique du médecin
 - Les données d'entraînement sont issues d'un dataset public international — une recalibration sur des données locales du CHU Hassan II améliorerait la précision
 - Le modèle calcule l'âge par différence d'années entières — une date de naissance précise donnerait un résultat plus fin
+- Le seuil de décision de 0.3 (plutôt que 0.5) privilégie volontairement le rappel au détriment de la précision — à réévaluer si l'usage clinique cible évolue vers un contexte moins orienté dépistage
